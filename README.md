@@ -42,7 +42,7 @@ The pipeline is composed of four main stages:
 ## 📊 Dataset Information
 
 The system operates on structural data. It requires:
-1. **Candidates Data (JSON/JSONL):** A dataset of candidate profiles containing fields such as ID, name, work experience, skills, and education.
+1. **Candidates Data (`candidate.jsonl`):** 🌟 **HIGHLIGHT: This dataset contains 1 Lakh (100,000) real candidate/student profiles.** It includes deep structural fields such as ID, name, work experience, skills, and education. Processing real-world profiles at this scale ensures the pipeline is robust and highly scalable.
 2. **Job Description (Text):** A raw text file containing the comprehensive job requirements and intent.
 
 ## ⚙️ Installation & Usage
