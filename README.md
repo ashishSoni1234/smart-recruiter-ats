@@ -1,61 +1,57 @@
-# India Runs AI Challenge - Rank 1 Submission 🏆
+# Intelligent Candidate Discovery & Ranking System
 
-Welcome to the **Solo Ranker** submission for the Intelligent Candidate Discovery & Ranking Challenge. 
+This repository contains the source code for the Redrob Hackathon (v4) candidate ranking challenge. The system is designed to parse the job description, extract core competencies, and rank 100,000 candidate profiles while strictly adhering to the 5-minute CPU compute constraint and offline-only requirements.
 
-This repository contains the architecture, logic, and offline-executable pipeline designed to parse 100,000+ candidate profiles, intelligently bypass keyword stuffers/"trap" candidates, and output the absolute best 100 fits within **under 2 minutes on a local CPU**, completely offline.
-
-## 🚀 Architecture: The 6-Layer Ranking Pipeline
-
-Recruiting is a multi-dimensional problem. Keyword matching fails because candidates lie, optimize their profiles, and hide red flags. To solve this, our system employs a **6-Layer Funnel Architecture**:
-
-### Layer 1: JD Parser & Intent Extraction (`jd_parser.py`)
-Instead of matching keywords, we parse the Job Description into a `JDIntentBundle`. This extracts the core competencies (e.g., Vector Search, MLOps, System Design) and defines a **Positive Semantic Anchor** (the ideal candidate's profile) and a **Negative Semantic Anchor** (the trap profile, like a title-chaser or framework enthusiast).
-
-### Layer 2: Ultra-Fast BM25 Pre-Filtering (`pipeline.py`)
-Running deep embedding models on 100,000 candidates takes over 30 minutes on a CPU. To stay under the 5-minute compute limit:
-- We combine raw text (Summary, History, Skills) for all candidates.
-- We use `BM25Okapi` to perform a blazing-fast sparse retrieval.
-- We filter out 98% of the noise in ~20 seconds, keeping only the **Top 2000** candidates for heavy enrichment.
-
-### Layer 3: Candidate Enricher & Lie Detection (`enricher.py`)
-For the top 2000 candidates, we run our defensive ML logic:
-- **Skill Verification (Lie Detector):** We generate dense embeddings for every skill the candidate claims and compare it against the semantic reality of their work history using cosine similarity. If the similarity is low, the skill is flagged.
-- **Trust Score:** Based on the lie detection, a trust score (0-100%) is generated.
-- **True Persona Derivation:** We build an unbiased "Truth Document" representing what the candidate *actually* does, stripping away marketing fluff.
-
-### Layer 4: Disqualifiers & Base Scoring (`scorer.py`)
-Before passing to the final ranking, we apply rigid constraints:
-- **Hard Disqualifiers:** Candidates with Notice Periods > 60 days, inactive for > 180 days, or matching "Title Chaser" heuristics are instantly dropped.
-- **Behavioral Vibe Score:** Evaluates culture alignment using signals like response times, offer acceptance rates, and platform engagement.
-
-### Layer 5: Hybrid Retrieval (`retrieval.py`)
-We build a local dual-index for the remaining candidates:
-- **Dense FAISS Index:** Embeddings generated via `all-MiniLM-L6-v2`.
-- **BM25 Sparse Index:** For exact keyword preservation.
-- We run a similarity search against the Positive Anchor and *subtract* similarity from the Negative Anchor (pushing away trap candidates). This grabs the Top 300.
-
-### Layer 6: Cross-Encoder Reranking & Final Offline Reasoning (`pipeline.py`)
-- **Cross-Encoder:** The Top 300 pairs (JD vs. Truth Document) are passed through `cross-encoder/ms-marco-MiniLM-L-6-v2` for highly accurate semantic matching.
-- **Final Blend:** The Cross-Encoder score is blended with the Trust Score, Behavioral Score, and Hybrid Score.
-- **Programmatic Reasoning:** Since LLM APIs are banned during the ranking phase (offline constraint), we dynamically generate a 2-sentence reasoning string based on the derived persona and computed metrics.
-
-## ⚙️ How to Run
+## 1. Setup Instructions
 
 ### Prerequisites
 - Python 3.11+
-- `pip install -r requirements.txt`
+- CPU with 16 GB RAM (No GPU required)
 
-### Execution
-To reproduce the output on the complete dataset:
+### Installation
+1. Clone the repository.
+2. Install the required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## 2. Reproduction Command
+
+To reproduce the exact submission CSV from the raw candidate data, run the following command. The script handles the entire pipeline end-to-end within the 5-minute compute budget (averaging ~90 seconds on a standard 8-core CPU).
+
 ```bash
-python pipeline.py --candidates data/candidates.jsonl --output solo_participant.csv --format jsonl
+python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output solo_participant.csv --format jsonl
 ```
 
-- **Speed:** ~1.5 - 2 minutes on CPU.
-- **Compliance:** 100% Offline. No network calls. 
-- **Validation:** Passes the official `validate_submission.py` perfectly.
+*Note: No pre-computation step is required. The pipeline runs from raw data to final CSV in a single step.*
 
-## 🧠 Why this gets Rank 1
-- **Defeats Honeypots:** The lie-detection matrix successfully identifies candidates who stuff skills they haven't used.
-- **Highly Optimized:** 1 Lakh profiles in 90 seconds without a GPU.
-- **Rules Compliant:** 101 lines exactly, proper tie-breakers (ID ascending), zero API reliance.
+## 3. System Architecture
+
+The ranking system is built on a 5-stage funnel architecture designed to balance precision with strict compute constraints. 
+
+### Stage 1: Sparse Pre-Filtering (`pipeline.py`)
+To process 100,000 candidates within the time limit, running dense embeddings across the entire dataset is computationally infeasible. We implement an initial fast-pass using `BM25Okapi` on raw candidate text strings (summary, history, skills) against the job description anchor. This filters the pool down to the top 2,000 candidates in under 30 seconds.
+
+### Stage 2: Heavy Enrichment & Verification (`enricher.py`)
+For the filtered subset of 2,000 candidates, we apply our dense models:
+- **Skill Verification Matrix:** Computes cosine similarity between claimed skills and actual career history descriptions using `all-MiniLM-L6-v2`. This acts as a defensive heuristic against keyword-stuffing.
+- **Trust Score & Persona Extraction:** Derives a verified persona and trust score based on the veracity of the candidate's profile.
+
+### Stage 3: Programmatic Disqualifiers (`scorer.py`)
+Applies hard constraints to eliminate "trap" profiles:
+- Disqualifies candidates with notice periods > 60 days.
+- Eliminates profiles matching negative semantic anchors (e.g., pure researchers lacking production experience, or title-chasers).
+- Computes a Behavioral Vibe score based on platform engagement signals.
+
+### Stage 4: Hybrid Retrieval (`retrieval.py`)
+Constructs a dual-index (Dense FAISS + Sparse BM25) for the remaining candidate pool. The system retrieves the top 300 candidates by evaluating similarity against the JD's Positive Anchor while penalizing similarity to the Negative Anchor.
+
+### Stage 5: Cross-Encoder Reranking & Formatting (`pipeline.py`)
+- **Reranking:** The top 300 pairs are passed through a Cross-Encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`) for precise semantic alignment.
+- **Scoring:** The final score is a weighted blend of the Cross-Encoder output, Trust Score, and Behavioral Score.
+- **Reasoning Generation:** Generates a dynamic, offline reasoning string based on the derived metrics to comply with the `has_network_during_ranking: false` rule.
+- **Output:** The top 100 candidates are written to the CSV, with tie-breakers deterministically handled by sorting `candidate_id` in ascending order.
+
+## 4. Sandbox Link
+
+A working sandbox environment for Stage 1 validation is documented in the `submission_metadata.yaml`. It accepts a small candidate sample and executes the exact pipeline architecture described above.
