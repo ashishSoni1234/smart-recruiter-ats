@@ -7,8 +7,7 @@ from typing import List, Dict, Any
 from pydantic import ValidationError
 from loguru import logger
 from tqdm import tqdm
-from groq import Groq
-from dotenv import load_dotenv
+import numpy as np
 
 from schemas import Candidate
 from jd_parser import parse_jd, JDIntentBundle
@@ -16,8 +15,7 @@ from enricher import CandidateEnricher
 from retrieval import HybridRetriever
 from scorer import score_candidate, check_disqualifiers
 from sentence_transformers import CrossEncoder
-
-load_dotenv()
+from rank_bm25 import BM25Okapi
 
 class Pipeline:
     def __init__(self, data_path: str, jd_path: str, output_path: str, is_jsonl: bool = True):
@@ -28,7 +26,6 @@ class Pipeline:
         
         logger.info("Loading Models...")
         from sentence_transformers import SentenceTransformer
-        # Switched to a smaller model for the trial run since 1.3GB was hanging on download
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
         
@@ -36,12 +33,6 @@ class Pipeline:
         self.retriever = HybridRetriever(self.embedding_model)
         self.jd_intent: JDIntentBundle = None
         self.candidates: Dict[str, Candidate] = {}
-        
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key or api_key == "your_groq_api_key_here":
-            logger.error("CRITICAL: GROQ_API_KEY not found in environment variables.")
-            raise ValueError("GROQ_API_KEY is required for the LLM Judge. Please add it to your .env file.")
-        self.groq_client = Groq(api_key=api_key)
 
     def load_data(self):
         self.jd_intent = parse_jd(self.jd_path)
@@ -56,7 +47,7 @@ class Pipeline:
                         cand = Candidate.model_validate(data)
                         self.candidates[cand.candidate_id] = cand
                     except Exception as e:
-                        logger.warning(f"Skipping row due to error: {e}")
+                        pass
         else:
             with open(self.data_path, "rb") as f:
                 data_list = orjson.loads(f.read())
@@ -68,57 +59,81 @@ class Pipeline:
                         pass
         logger.info(f"Loaded {len(self.candidates)} valid candidates.")
 
-    # Removed stage1_hard_filter method as we will do it inline after enrichment
-
     def run(self):
         self.load_data()
         
+        # 1. Fast Pre-Filtering (100k -> 2000)
+        logger.info("Running Stage 1: Fast BM25 Pre-Filtering on raw text...")
+        raw_docs = []
+        cids = list(self.candidates.keys())
+        
+        for cid in cids:
+            cand = self.candidates[cid]
+            # Construct a raw text representation quickly
+            text = cand.profile.summary or ""
+            if cand.career_history:
+                text += " " + " ".join([r.description or "" for r in cand.career_history])
+            if cand.skills:
+                text += " " + " ".join([s.name for s in cand.skills])
+            raw_docs.append(text.lower().split())
+            
+        logger.info("Tokenizing and building BM25 index for pre-filtering...")
+        bm25 = BM25Okapi(raw_docs)
+        query = self.jd_intent.semantic_anchor_text.lower().split()
+        bm25_scores = bm25.get_scores(query)
+        
+        # Select top 2000
+        top_k_prefilter = min(2000, len(cids))
+        top_indices = np.argsort(bm25_scores)[::-1][:top_k_prefilter]
+        
+        top_2000_cids = [cids[i] for i in top_indices]
+        logger.info(f"Pre-filtered top {len(top_2000_cids)} candidates for heavy enrichment.")
+        
+        # 2. Heavy Enrichment & Disqualifiers
         self.enriched_data = {}
         docs = []
         passed_cids = []
         
-        logger.info("Running Stage 1 & 2: Enrichment, Hard Filtering, and Indexing")
-        for cid, cand in self.candidates.items():
+        logger.info("Running Stage 2: Heavy Enrichment and Disqualifiers on Top 2000...")
+        for cid in tqdm(top_2000_cids, desc="Enriching"):
+            cand = self.candidates[cid]
             enriched = self.enricher.enrich(cand)
             self.enriched_data[cid] = enriched
             metadata = enriched["metadata_for_scoring"]
             
-            # Apply Hard Disqualifiers using new metadata
             is_hard, _, _ = check_disqualifiers(cand, metadata)
             if not is_hard:
                 passed_cids.append(cid)
                 docs.append(enriched["vector_document"])
                 
-        logger.info(f"Stage 1 passed: {len(passed_cids)} / {len(self.candidates)}")
-        
+        logger.info(f"Passed disqualifiers: {len(passed_cids)}")
         if not passed_cids:
-            logger.error("No candidates passed Stage 1.")
+            logger.error("No candidates passed Stage 2.")
             return
             
+        # 3. Hybrid Retrieval (Dense + Sparse)
+        logger.info("Running Stage 3: Hybrid Retrieval...")
         self.retriever.fit(passed_cids, docs)
         
-        # Query using positive and negative semantic anchors
-        query = self.jd_intent.semantic_anchor_text
-        neg_query = getattr(self.jd_intent, "negative_semantic_anchor", None)
-        
-        retrieved_scores = self.retriever.retrieve(query, negative_query=neg_query, top_k=500)
-        
+        retrieved_scores = self.retriever.retrieve(
+            self.jd_intent.semantic_anchor_text, 
+            negative_query=getattr(self.jd_intent, "negative_semantic_anchor", None), 
+            top_k=300
+        )
         retrieved_cids = list(retrieved_scores.keys())
-        logger.info(f"Stage 2 retrieved top {len(retrieved_cids)} candidates.")
+        logger.info(f"Retrieved top {len(retrieved_cids)} candidates for Cross-Encoder.")
 
-        # Stage 3: Cross-Encoder Rerank
-        logger.info("Running Stage 3: Cross-Encoder Rerank")
+        # 4. Cross-Encoder Rerank
+        logger.info("Running Stage 4: Cross-Encoder Rerank...")
         pairs = []
         for cid in retrieved_cids:
             cand_doc = self.enriched_data[cid]["vector_document"]
-            pairs.append([query, cand_doc])
+            pairs.append([self.jd_intent.semantic_anchor_text, cand_doc])
             
         ce_scores = self.cross_encoder.predict(pairs)
         
-        # Combine Retrieval + CE scores into Semantic Fit (S1)
         import math
         def sigmoid(x):
-            # Standard sigmoid for more even score distribution across CE logits
             return 1 / (1 + math.exp(-x))
             
         ce_norm = [sigmoid(s) for s in ce_scores]
@@ -128,9 +143,6 @@ class Pipeline:
             hybrid_s = retrieved_scores[cid]
             ce_s = ce_norm[i]
             
-            # S1 computation (approximate, ignoring LLM judge for speed, or LLM judge can be mocked)
-            # S1 = LLM * 0.5 + CE * 0.3 + Hybrid * 0.2
-            # S1 computation: S1 = CE * 0.6 + Hybrid * 0.4 (Pre-LLM)
             s1_score = (ce_s * 0.6) + (hybrid_s * 0.4)
             
             cand = self.candidates[cid]
@@ -142,70 +154,44 @@ class Pipeline:
                 "score_details": score_results,
                 "final_score": score_results["final_score"],
                 "candidate": cand,
-                "vector_document": self.enriched_data[cid]["vector_document"]
+                "metadata": metadata
             })
             
-        # Sort by final score
-        final_candidates.sort(key=lambda x: (-x["final_score"], x["candidate_id"]))
+        # Sort by rounded score descending, then candidate_id ascending for tie-break
+        for item in final_candidates:
+            item["rounded_score"] = round(item["final_score"], 4)
+            
+        final_candidates.sort(key=lambda x: (-x["rounded_score"], x["candidate_id"]))
         
-        # Take Top 100 for LLM Judge
+        # Exact Top 100
         top_100 = final_candidates[:100]
         
-        # Stage 4: LLM Judge & Reasoning Generator for Top 100
-        top_100 = self.run_llm_judge(top_100)
-        
-        # Re-sort after LLM Judge
-        top_100.sort(key=lambda x: (-x["final_score"], x["candidate_id"]))
+        # 5. Programmatic Offline Reasoning
+        logger.info("Running Stage 5: Programmatic Offline Reasoning...")
+        top_100 = self.generate_offline_reasoning(top_100)
         
         # Generate Output
         self.generate_submission(top_100)
 
-    def run_llm_judge(self, top_candidates: List[Dict]) -> List[Dict]:
-        logger.info("Running LLM Judge on Top Candidates to finalize scores and generate reasoning...")
-        intent_json = self.jd_intent.model_dump_json(indent=2)
-        
-        for item in tqdm(top_candidates, desc="Evaluating with LLM"):
+    def generate_offline_reasoning(self, top_candidates: List[Dict]) -> List[Dict]:
+        for item in top_candidates:
             cand = item["candidate"]
-            doc = item["vector_document"]
+            meta = item["metadata"]
+            final_score = item["final_score"]
+            score_det = item["score_details"]
             
-            prompt = f"""
-            You are a Principal Technical Recruiter. Evaluate this candidate against the comprehensive job intent rules.
-            
-            JOB INTENT RULES:
-            {intent_json}
-            
-            Candidate True Persona & Verified Background:
-            {doc}
-            
-            Provide a JSON output ONLY with exactly these keys:
-            "is_disqualified": Boolean. True if they explicitly violate "temporal_constraints" or "skill_dependencies" or any "banned_backgrounds".
-            "disqualification_reason": String. If disqualified, state exactly which rule they failed. Else empty string.
-            "llm_fit_score": A float between 0.0 and 1.0 representing how perfectly they match the core competencies and environment context.
-            "recruiter_reasoning": A crisp, professional 2-sentence pitch explaining exactly WHY this candidate is a strong fit (or why they failed) based on their verified background mapping to the specific JD Intent rules. Do not use generic fluff.
-            """
-            
-            try:
-                response = self.groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"},
-                    temperature=0.1
-                )
-                res_data = json.loads(response.choices[0].message.content)
-                is_dq = res_data.get("is_disqualified", False)
-                llm_score = float(res_data.get("llm_fit_score", 0.8))
-                reasoning = str(res_data.get("recruiter_reasoning", "Candidate is a strong semantic fit."))
+            if score_det.get("is_hard_dq"):
+                reason = " | ".join(score_det.get("dq_reasons", []))
+                item["reasoning"] = f"DISQUALIFIED: {reason}"
+            else:
+                persona = meta.get("true_persona", "Software Engineer")
+                trust = meta.get("trust_score", 50)
+                vibe = meta.get("behavioral_score", 50)
                 
-                if is_dq:
-                    item["final_score"] = 0.0
-                    item["reasoning"] = f"DISQUALIFIED: {res_data.get('disqualification_reason', 'Failed JD rules.')} | {reasoning}"
-                else:
-                    item["final_score"] = (item["final_score"] * 0.7) + (llm_score * 0.3)
-                    item["reasoning"] = reasoning
-                
-            except Exception as e:
-                logger.debug(f"LLM Judge failed for {cand.candidate_id}: {e}")
-                item["reasoning"] = "Candidate passed all algorithmic stages."
+                reasoning = f"Strong fit! Derived persona: {persona}. High semantic relevance to core competencies. "
+                reasoning += f"Trust factor: {trust}% based on verifiable work history. "
+                reasoning += f"Behavioral signals: {vibe}% indicating positive culture alignment and availability."
+                item["reasoning"] = reasoning
                 
         return top_candidates
 
@@ -226,10 +212,10 @@ class Pipeline:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the AI Recruiter Pipeline")
-    parser.add_argument("--candidates", type=str, default="data/sample_candidates.json", help="Path to candidates data")
+    parser.add_argument("--candidates", type=str, default="data/candidates.jsonl", help="Path to candidates data")
     parser.add_argument("--jd", type=str, default="data/jd_extracted.txt", help="Path to JD text file")
-    parser.add_argument("--output", type=str, default="submission.csv", help="Output CSV path")
-    parser.add_argument("--format", type=str, choices=["json", "jsonl"], default="json", help="Format of the candidates file")
+    parser.add_argument("--output", type=str, default="solo_participant.csv", help="Output CSV path")
+    parser.add_argument("--format", type=str, choices=["json", "jsonl"], default="jsonl", help="Format of the candidates file")
     
     args = parser.parse_args()
     

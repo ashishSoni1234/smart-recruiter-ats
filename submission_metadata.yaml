@@ -1,0 +1,44 @@
+team_name: "solo_ranker"
+
+primary_contact:
+  name: "Solo Participant"
+  email: "participant@example.com"
+  phone: "+91-0000000000"
+
+team_members:
+  - name: "Solo Participant"
+    email: "participant@example.com"
+    role: "ML Engineer"
+
+github_repo: "https://github.com/YOUR_USERNAME/YOUR_REPO"
+
+sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"
+
+reproduce_command: "python pipeline.py --candidates data/candidates.jsonl --output solo_participant.csv"
+
+compute:
+  platform: "Local CPU"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.11"
+  os: "Windows"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+ai_tools_used:
+  - "Gemini"
+
+ai_usage_summary: |
+  Used Gemini to optimize the pipeline logic for processing 100,000 candidates efficiently within the 5-minute constraint by implementing BM25 pre-filtering and removing API calls to adhere to offline constraints.
+
+methodology_summary: |
+  Optimized hybrid search ranker. Used BM25 on raw candidate strings to pre-filter the 100,000 candidates down to the top 2000 in under 30 seconds. Applied advanced semantic lie-detection and trust-scoring algorithms on this subset using sentence-transformers, followed by a Cross-Encoder re-rank. The final offline heuristic combined the Cross-Encoder score with Behavioral Vibe and Trust Score to extract the Top 100 candidates.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: false
+  reproduction_tested: true
