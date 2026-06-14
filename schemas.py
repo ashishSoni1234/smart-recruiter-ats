@@ -31,13 +31,22 @@ class EducationItem(BaseModel):
     start_year: int
     end_year: int
     grade: Optional[str] = None
-    tier: Optional[str] = None
+    tier: Optional[str] = None  # tier_1, tier_2, tier_3, tier_4, unknown
 
 class SkillItem(BaseModel):
     name: str
     proficiency: str
     endorsements: int
     duration_months: Optional[int] = None
+
+class CertificationItem(BaseModel):
+    name: str
+    issuer: str
+    year: int
+
+class LanguageItem(BaseModel):
+    language: str
+    proficiency: str
 
 class RedrobSignals(BaseModel):
     profile_completeness_score: float
@@ -70,4 +79,6 @@ class Candidate(BaseModel):
     career_history: List[CareerHistoryItem]
     education: List[EducationItem] = Field(default_factory=list)
     skills: List[SkillItem] = Field(default_factory=list)
+    certifications: List[CertificationItem] = Field(default_factory=list)
+    languages: List[LanguageItem] = Field(default_factory=list)
     redrob_signals: RedrobSignals

@@ -1,6 +1,21 @@
-# Intelligent Candidate Discovery & Ranking System
+# 🤖 Smart Recruiter ATS — AI Candidate Ranking System
 
-This repository contains the source code for the Redrob Hackathon (v4) candidate ranking challenge. The system is designed to parse the job description, extract core competencies, and rank 100,000 candidate profiles while strictly adhering to the 5-minute CPU compute constraint and offline-only requirements.
+> **Redrob Hackathon v4 | Data & AI Challenge**  
+> Submitted by: Ashish Soni | Team: ashish-soni-solo
+
+A 5-stage hybrid AI ranking pipeline that ranks candidates the way a great recruiter would — not by matching keywords, but by understanding who genuinely fits the role.
+
+---
+
+## 📋 Table of Contents
+1. [Setup Instructions](#1-setup-instructions)
+2. [Reproduction Command](#2-reproduction-command)
+3. [System Architecture](#3-system-architecture)
+4. [Pre-Computation Step](#4-pre-computation-step)
+5. [Scoring Formula](#5-scoring-formula)
+6. [Sandbox Demo](#6-sandbox-demo)
+
+---
 
 ## 1. Setup Instructions
 
@@ -9,49 +24,110 @@ This repository contains the source code for the Redrob Hackathon (v4) candidate
 - CPU with 16 GB RAM (No GPU required)
 
 ### Installation
-1. Clone the repository.
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+# 1. Clone the repo
+git clone https://github.com/ashishSoni1234/smart-recruiter-ats.git
+cd smart-recruiter-ats
+
+# 2. Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate       # Windows
+# source .venv/bin/activate  # Linux/macOS
+
+# 3. Install dependencies
+pip install -r requirements.txt
+```
+
+---
 
 ## 2. Reproduction Command
 
-To reproduce the exact submission CSV from the raw candidate data, run the following command. The script handles the entire pipeline end-to-end within the 5-minute compute budget (averaging ~90 seconds on a standard 8-core CPU).
+To reproduce the **exact submission CSV** from raw candidate data, run:
 
 ```bash
 python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output solo_participant.csv --format jsonl
 ```
 
-*Note: No pre-computation step is required. The pipeline runs from raw data to final CSV in a single step.*
+**Expected runtime:** ~90 seconds on 8-core CPU  
+**RAM usage:** ~4-6 GB peak  
+**Network required:** ❌ No (fully offline — JD intent pre-cached)
+
+---
 
 ## 3. System Architecture
 
-The ranking system is built on a 5-stage funnel architecture designed to balance precision with strict compute constraints. 
+The pipeline is a **5-stage funnel** designed to balance precision with the 5-minute CPU constraint.
 
-### Stage 1: Sparse Pre-Filtering (`pipeline.py`)
-To process 100,000 candidates within the time limit, running dense embeddings across the entire dataset is computationally infeasible. We implement an initial fast-pass using `BM25Okapi` on raw candidate text strings (summary, history, skills) against the job description anchor. This filters the pool down to the top 2,000 candidates in under 30 seconds.
+### Stage 1 — Sparse Pre-Filtering (`pipeline.py`)
+**Input:** 100,000 candidates | **Output:** Top 2,000
 
-### Stage 2: Heavy Enrichment & Verification (`enricher.py`)
-For the filtered subset of 2,000 candidates, we apply our dense models:
-- **Skill Verification Matrix:** Computes cosine similarity between claimed skills and actual career history descriptions using `all-MiniLM-L6-v2`. This acts as a defensive heuristic against keyword-stuffing.
-- **Trust Score & Persona Extraction:** Derives a verified persona and trust score based on the veracity of the candidate's profile.
+Fast BM25 pre-filter on raw candidate text (summary + title + skills + career history descriptions). Reduces the pool from 100K to 2,000 in under 30 seconds without any dense model inference.
 
-### Stage 3: Programmatic Disqualifiers (`scorer.py`)
-Applies hard constraints to eliminate "trap" profiles:
-- Disqualifies candidates with notice periods > 60 days.
-- Eliminates profiles matching negative semantic anchors (e.g., pure researchers lacking production experience, or title-chasers).
-- Computes a Behavioral Vibe score based on platform engagement signals.
+### Stage 2 — Heavy Enrichment & Verification (`enricher.py`)
+**Input:** Top 2,000 | **Output:** Enriched metadata per candidate
 
-### Stage 4: Hybrid Retrieval (`retrieval.py`)
-Constructs a dual-index (Dense FAISS + Sparse BM25) for the remaining candidate pool. The system retrieves the top 300 candidates by evaluating similarity against the JD's Positive Anchor while penalizing similarity to the Negative Anchor.
+For each of the top 2,000 candidates, we compute:
+- **Skill Verification (Lie Detector):** Cosine similarity between claimed skills and actual career history using `BAAI/bge-small-en-v1.5`. Skills with <0.30 semantic similarity AND no keyword/partial match are flagged as potentially hallucinated.
+- **True Persona Extraction:** Derives the candidate's real role (ML Engineer, Data Scientist, Product Manager, etc.) from career descriptions using embedding-based similarity to 11 standard role archetypes.
+- **Honeypot Detection:** Catches candidates with (a) claimed experience far exceeding career history timeline, or (b) "expert" proficiency in 8+ skills with zero endorsements and zero duration.
+- **Company DNA Analysis:** Distinguishes product companies vs. consulting firms (TCS, Infosys, Wipro, etc.).
+- **Comprehensive Behavioral Score:** Uses all 23 Redrob platform signals — response rate, recency, interview completion rate, saved by recruiters, offer acceptance rate, profile completeness.
+- **External Validation Score:** GitHub activity score + platform skill assessment scores.
+- **Education Tier Score:** Maps `tier_1` through `tier_4` institution tiers to a 0-100 score.
 
-### Stage 5: Cross-Encoder Reranking & Formatting (`pipeline.py`)
-- **Reranking:** The top 300 pairs are passed through a Cross-Encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`) for precise semantic alignment.
-- **Scoring:** The final score is a weighted blend of the Cross-Encoder output, Trust Score, and Behavioral Score.
-- **Reasoning Generation:** Generates a dynamic, offline reasoning string based on the derived metrics to comply with the `has_network_during_ranking: false` rule.
-- **Output:** The top 100 candidates are written to the CSV, with tie-breakers deterministically handled by sorting `candidate_id` in ascending order.
+### Stage 3 — Programmatic Disqualifiers (`scorer.py`)
+**Hard DQ (score = 0):** Notice period >90 days, confirmed honeypot profiles  
+**Soft penalties (score multiplier):** Ghost candidates (180d inactive + <20% response rate), high skill hallucination rate (>40%), notice period 30-90 days (gradual penalty)
 
-## 4. Sandbox Link
+### Stage 4 — Hybrid Retrieval (`retrieval.py`)
+**Input:** Passed candidates | **Output:** Top 300
 
-A working sandbox environment for Stage 1 validation is documented in the `submission_metadata.yaml`. It accepts a small candidate sample and executes the exact pipeline architecture described above.
+Constructs a dual-index (Dense FAISS + Sparse BM25) for the remaining pool. Retrieval uses **Reciprocal Rank Fusion (RRF, k=60)** to merge dense and sparse rankings. Crucially, similarity to the **Negative Semantic Anchor** (a crafted description of who NOT to hire) is subtracted from the positive similarity score, pushing keyword-stuffers and anti-profiles down.
+
+### Stage 5 — Cross-Encoder Reranking & Scoring (`pipeline.py`)
+**Input:** Top 300 | **Output:** Final ranked top 100
+
+- **Cross-Encoder:** `cross-encoder/ms-marco-MiniLM-L-6-v2` scores each (JD anchor, candidate doc) pair with precise semantic alignment
+- **Final Score Blend:** S1 (semantic, 50%) + S2 (culture/stability, 15%) + S3 (availability/behavioral, 12%) + S4 (trust/skill-verification, 10%) + S5 (GitHub/external, 8%) + S6 (education, 5%)
+- **Reasoning:** Each candidate gets a unique, data-driven reasoning string referencing their actual verified skills, years of experience, persona, GitHub activity, trust score, notice period, and behavioral engagement
+
+---
+
+## 4. Pre-Computation Step
+
+The JD parsing (Groq API call) is a one-time pre-computation step. The result is cached to `data/jd_intent_cache.json`.
+
+**The ranking step reads only from the cache — zero network calls.**
+
+To regenerate the JD intent cache (optional):
+```bash
+# Requires GROQ_API_KEY in .env file
+python jd_parser.py
+```
+
+The cache is already committed to the repository. No pre-computation is needed for reproduction.
+
+---
+
+## 5. Scoring Formula
+
+```
+Final Score = base_score × soft_penalty_multiplier
+
+base_score = (S1 × 0.50) + (S2 × 0.15) + (S3 × 0.12) + (S4 × 0.10) + (S5 × 0.08) + (S6 × 0.05)
+
+S1 = (CrossEncoder_score × 0.65) + (HybridRRF_score × 0.35)   [Semantic match]
+S2 = f(avg_tenure, company_DNA, title_chaser_check)             [Culture/stability]
+S3 = blend(notice_period, recency, open_flag, behavioral_vibe)  [Availability]
+S4 = verified_skills / total_skills                             [Trust]
+S5 = f(github_activity, skill_assessment_scores, endorsements)  [External validation]
+S6 = education_tier_mapping                                     [Education]
+```
+
+---
+
+## 6. Sandbox Demo
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ashishSoni1234/smart-recruiter-ats/blob/main/sandbox_demo.ipynb)
+
+The Colab notebook runs the full pipeline on `data/sample_candidates.json` (included in the repo) and validates the output format using the official `validate_submission.py` script.

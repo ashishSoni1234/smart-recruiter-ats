@@ -1,0 +1,202 @@
+{
+  "core_competencies": [
+    {
+      "category": "Vector Database Infrastructure",
+      "specific_mentions": [
+        "Pinecone",
+        "Weaviate",
+        "Qdrant",
+        "Milvus",
+        "OpenSearch",
+        "Elasticsearch",
+        "FAISS"
+      ],
+      "context": "Production operational experience handling embedding drift, index refresh, and retrieval-quality regression.",
+      "is_dealbreaker": true
+    },
+    {
+      "category": "Evaluation Frameworks",
+      "specific_mentions": [
+        "NDCG",
+        "MRR",
+        "MAP",
+        "A/B testing",
+        "offline-to-online correlation"
+      ],
+      "context": "Designing rigorous offline evaluation with online A/B test correlation for ranking systems.",
+      "is_dealbreaker": true
+    },
+    {
+      "category": "Embeddings-based Retrieval",
+      "specific_mentions": [
+        "sentence-transformers",
+        "OpenAI embeddings",
+        "BGE",
+        "E5",
+        "hybrid search"
+      ],
+      "context": "Deployed to real users at scale. Must have handled embedding drift in production.",
+      "is_dealbreaker": true
+    },
+    {
+      "category": "Production Python",
+      "specific_mentions": [
+        "Python",
+        "FastAPI",
+        "production-grade code"
+      ],
+      "context": "Strong Python. Writes production code, not demos.",
+      "is_dealbreaker": true
+    },
+    {
+      "category": "LLM Integration",
+      "specific_mentions": [
+        "RAG",
+        "LLM fine-tuning",
+        "LoRA",
+        "QLoRA",
+        "PEFT",
+        "prompt engineering"
+      ],
+      "context": "LLM fine-tuning nice-to-have. Must understand when to fine-tune vs when to prompt.",
+      "is_dealbreaker": false
+    }
+  ],
+  "skill_dependencies": [
+    {
+      "primary_skill": "AI/LLM App Development",
+      "requires_proof_of": [
+        "Pre-LLM-era ML production experience",
+        "Understanding of retrieval/ranking fundamentals"
+      ]
+    },
+    {
+      "primary_skill": "Ranking Systems",
+      "requires_proof_of": [
+        "Evaluation metrics like NDCG or MRR",
+        "A/B Test interpretation",
+        "Production deployment"
+      ]
+    },
+    {
+      "primary_skill": "Vector Database",
+      "requires_proof_of": [
+        "Embedding drift handling",
+        "Index refresh experience",
+        "Production scale deployment"
+      ]
+    }
+  ],
+  "temporal_constraints": [
+    {
+      "rule": "Has written production code in the last 18 months",
+      "penalty_if_violated": "Do not move forward \u2014 this role requires active coding"
+    },
+    {
+      "rule": "AI/ML experience of at least 2 years at a product company",
+      "penalty_if_violated": "Down-rank significantly if only consulting or research backgrounds"
+    }
+  ],
+  "proxy_proofs": [
+    {
+      "signal_type": "Open-source contributions, GitHub activity, papers, talks",
+      "context": "Critical external validation if candidate has only worked on closed-source proprietary systems for 5+ years."
+    },
+    {
+      "signal_type": "Active on Redrob platform \u2014 logged in recently, responding to recruiters",
+      "context": "Behavioral signal of actually being in the job market and available to hire."
+    },
+    {
+      "signal_type": "Platform skill assessment scores",
+      "context": "Objective third-party validation of claimed technical skills."
+    }
+  ],
+  "environment_context": {
+    "dna_fit": "Scrappy product-engineering attitude, Series A stage, 0-to-1 builder, fast shipper, async-first writer.",
+    "banned_backgrounds": [
+      "Pure research environments without production deployment \u2014 tried twice, didn't work",
+      "Only consulting firms (TCS, Infosys, Wipro, Accenture, etc.) in entire career without product-company experience",
+      "Big Tech lifers needing well-scoped roles and stable codebases",
+      "Recent AI experience consisting primarily of LangChain tutorials calling OpenAI without pre-LLM ML fundamentals",
+      "Senior engineers who haven't written production code in 18+ months due to architecture/tech-lead roles"
+    ]
+  },
+  "culture_signals": [
+    "Async-first communication, writes well and writes a lot",
+    "Disagrees openly and decides quickly \u2014 not conflict-averse",
+    "Moves fast, ships scrappy v1s, learns from real users",
+    "Plans to be here 3+ years \u2014 not a title chaser",
+    "Thinks about systems and first principles, not frameworks"
+  ],
+  "hyde_profiles": [
+    {
+      "title": "Search ML Engineer at Mid-Size Product Company",
+      "background_summary": "4-6 years at product companies building core search/relevance engines for e-commerce or marketplace platforms. Has shipped BM25-to-hybrid search transitions. Runs A/B tests, reads NDCG scores religiously.",
+      "key_experiences": [
+        "Transitioned BM25 to hybrid dense+sparse retrieval in production",
+        "Built A/B testing framework for ranking evaluation",
+        "Handled embedding drift and index refresh at real user scale",
+        "Shipped scrappy v1 rankers quickly, then iterated based on recruiter feedback",
+        "Active on GitHub with open-source ML contributions"
+      ]
+    },
+    {
+      "title": "Early Startup Founding Engineer with AI Specialization",
+      "background_summary": "Built the entire data and AI pipeline from scratch at a Seed/Series A company. Owns retrieval and ranking end-to-end. Has a scrappy bias \u2014 ships working systems before perfect ones.",
+      "key_experiences": [
+        "End-to-end ownership of recommendation or search systems",
+        "Used sentence-transformers or OpenAI embeddings in production",
+        "Evaluated models using NDCG and MAP, set up offline benchmark pipelines",
+        "Mentored junior engineers, worked closely with PMs",
+        "5-8 years total, 3-5 in applied ML/AI at product companies"
+      ]
+    },
+    {
+      "title": "ML Engineer from Indian Product Unicorn",
+      "background_summary": "3-5 years at a major Indian product company (Swiggy, Flipkart, Zomato, Razorpay, Meesho) in the ML platform or search team. Deep experience with large-scale retrieval and ranking.",
+      "key_experiences": [
+        "Built large-scale vector search serving millions of queries",
+        "Worked on candidate-JD or item-user matching systems",
+        "Has hands-on Python and strong system design",
+        "Understands latency-quality tradeoffs in production"
+      ]
+    }
+  ],
+  "semantic_anchor_text": "A pragmatic, product-focused Machine Learning Engineer with 5-9 years of total experience, of which 3-5 years are at product companies (not pure services or research). They have shipped at least one end-to-end ranking, search, or recommendation system to real users at meaningful scale. They possess deep operational experience with vector databases (Pinecone, FAISS, Elasticsearch) and embedding models (sentence-transformers, BGE, E5) in production environments, having dealt with embedding drift, index refresh, and retrieval regression. They design rigorous evaluation frameworks using NDCG, MRR, MAP, and offline-to-online A/B testing. Culturally, they thrive in scrappy, fast-paced, async-first environments, writing production-grade Python. They have GitHub activity or open-source contributions demonstrating external validation of their work. They plan for 3+ year tenures and think about systems and first principles rather than chasing frameworks or titles. They can mentor junior engineers and collaborate closely with product managers on what to build.",
+  "anti_hyde_profiles": [
+    {
+      "title": "The LangChain Tutorial Surfer",
+      "background_summary": "Has dozens of recent AI projects listed but <12 months of AI experience, all using LangChain to call OpenAI. No pre-LLM ML fundamentals.",
+      "red_flags": [
+        "Uses OpenAI API via LangChain but doesn't understand underlying retrieval/ranking math",
+        "No production deployment experience \u2014 only demos and notebooks",
+        "Framework enthusiast without systems thinking",
+        "Cannot explain NDCG or why it matters",
+        "GitHub full of tutorial repos, not original systems"
+      ]
+    },
+    {
+      "title": "The Pure Academic Researcher",
+      "background_summary": "Spent 5-7 years in academic lab or research-only roles publishing papers on computer vision, NLP, or robotics. Zero production deployments.",
+      "red_flags": [
+        "No production deployment \u2014 all work in controlled research settings",
+        "No NLP/IR/retrieval exposure relevant to hiring intelligence",
+        "Needs stable, well-scoped research environment \u2014 cannot ship scrappy v1s",
+        "Cannot handle ambiguous product requirements",
+        "Papers without any real-user validation"
+      ]
+    },
+    {
+      "title": "The Hands-off Enterprise Architect or Title Chaser",
+      "background_summary": "Works at a massive consulting firm or has switched companies every 1.5 years chasing title upgrades (Senior \u2192 Staff \u2192 Principal). Hasn't written production code in 18+ months.",
+      "red_flags": [
+        "Last code commit was 18+ months ago \u2014 now does architecture review only",
+        "Switches companies every 1-1.5 years, multiple roles in career history",
+        "Pure consulting background (TCS, Infosys, Wipro, Accenture) without any product company experience",
+        "Needs a large team, stable codebase, and well-defined scope",
+        "Optimizes for titles and compensation, not product impact"
+      ]
+    }
+  ],
+  "negative_semantic_anchor": "A candidate optimizing for job titles rather than product impact, switching companies every 1-1.5 years. They might be a pure researcher with zero real-world production deployment, or a senior architect who hasn't written production code in over 18 months. They work exclusively at large consulting firms \u2014 TCS, Infosys, Wipro, Accenture, Capgemini \u2014 without any product-company experience, relying on well-scoped enterprise projects with large teams. They have adopted AI/LLM tooling recently by wrapping OpenAI APIs in LangChain without understanding core ML retrieval and ranking fundamentals. Their expertise lies entirely in non-IR fields like computer vision, speech, or robotics without significant NLP or information retrieval exposure. They have worked exclusively on closed-source proprietary systems with no external validation \u2014 no GitHub, no papers, no talks. They are inactive on job platforms, have low recruiter response rates, and long notice periods exceeding 90 days."
+}

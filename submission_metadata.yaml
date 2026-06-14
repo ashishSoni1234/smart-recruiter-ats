@@ -1,44 +1,57 @@
-team_name: "solo_ranker"
+team_name: "ashish-soni-solo"
 
 primary_contact:
-  name: "Solo Participant"
-  email: "participant@example.com"
-  phone: "+91-0000000000"
+  name: "Ashish Soni"
+  email: "soniashish37066@gmail.com"
+  phone: "+91-9717501442"
 
 team_members:
-  - name: "Solo Participant"
-    email: "participant@example.com"
+  - name: "Ashish Soni"
+    email: "soniashish37066@gmail.com"
     role: "ML Engineer"
 
-github_repo: "https://github.com/YOUR_USERNAME/YOUR_REPO"
+github_repo: "https://github.com/ashishSoni1234/smart-recruiter-ats"
 
-sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"
+sandbox_link: "https://colab.research.google.com/github/ashishSoni1234/smart-recruiter-ats/blob/main/sandbox_demo.ipynb"
 
-reproduce_command: "python pipeline.py --candidates data/candidates.jsonl --output solo_participant.csv"
+reproduce_command: "python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output solo_participant.csv --format jsonl"
 
 compute:
-  platform: "Local CPU"
+  platform: "Local CPU (Windows)"
   cpu_cores: 8
   ram_gb: 16
   python_version: "3.11"
-  os: "Windows"
+  os: "Windows 11"
   uses_gpu_for_inference: false
   has_network_during_ranking: false
-  pre_computation_required: false
-  pre_computation_time_minutes: 0
+  pre_computation_required: true
+  pre_computation_time_minutes: 2
 
 ai_tools_used:
   - "Gemini"
 
 ai_usage_summary: |
-  Used Gemini to optimize the pipeline logic for processing 100,000 candidates efficiently within the 5-minute constraint by implementing BM25 pre-filtering and removing API calls to adhere to offline constraints.
+  Used Gemini (Antigravity IDE) for code review and architectural discussion.
+  JD parsing was pre-computed using Groq API (llama-3.3-70b) and cached to
+  data/jd_intent_cache.json. The ranking step itself uses no network calls —
+  only local CPU models (sentence-transformers, cross-encoder). No candidate
+  data was fed to any LLM.
 
 methodology_summary: |
-  Optimized hybrid search ranker. Used BM25 on raw candidate strings to pre-filter the 100,000 candidates down to the top 2000 in under 30 seconds. Applied advanced semantic lie-detection and trust-scoring algorithms on this subset using sentence-transformers, followed by a Cross-Encoder re-rank. The final offline heuristic combined the Cross-Encoder score with Behavioral Vibe and Trust Score to extract the Top 100 candidates.
+  5-stage hybrid ranker with negative vector anchoring. Stage 1: BM25
+  pre-filter on raw text reduces 100K candidates to top 2000 in ~30s.
+  Stage 2: Dense skill verification using cosine similarity to catch keyword
+  stuffers; trust score derived from verified vs. claimed skills. Stage 3:
+  Programmatic disqualifiers (ghost candidates, title chasers, excessive
+  notice period). Stage 4: Hybrid retrieval using RRF fusion of BM25 + FAISS
+  with negative semantic anchor penalty. Stage 5: Cross-Encoder rerank on
+  top 300, blended with Trust Score, GitHub activity, platform behavioral
+  signals, and education tier into a final weighted score. Runtime: ~90
+  seconds on 8-core CPU.
 
 declarations:
   read_submission_spec: true
   code_is_original_work: true
   no_collusion: true
-  honeypot_check_done: false
+  honeypot_check_done: true
   reproduction_tested: true
