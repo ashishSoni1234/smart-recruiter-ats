@@ -232,14 +232,30 @@ class Pipeline:
             if hallucinated:
                 parts.append(f"Unverified claims: {', '.join(hallucinated[:3])}.")
 
-            # 3. Semantic fit signal
+            # 3. Semantic fit signal — nuanced per rank tier
             s1 = score_det.get("s1_semantic", 0)
             if s1 > 0.75:
                 parts.append("Strong semantic match to JD core competencies.")
             elif s1 > 0.55:
-                parts.append("Moderate semantic alignment with JD.")
+                parts.append("Moderate semantic alignment with JD retrieval + ranking profile.")
+            elif rank <= 10:
+                # Top 10 with moderate s1 — explain what elevated them
+                elev = []
+                if meta.get("tier1_product_experience"):
+                    elev.append("tier-1 product background")
+                if meta.get("trust_score", 0) >= 80:
+                    elev.append("high skill trust score")
+                if meta.get("github_activity_score", -1) >= 50:
+                    elev.append("strong external validation")
+                if meta.get("behavioral_score", 0) >= 80:
+                    elev.append("high platform engagement")
+                elev_str = ", ".join(elev) if elev else "strong composite profile signals"
+                parts.append(f"Dense embedding match below top threshold; elevated by {elev_str}.")
+            elif rank <= 25:
+                parts.append("Moderate composite fit — retrieval signals and behavioral profile compensate for lower embedding similarity.")
             else:
-                parts.append("Weak semantic match; included for other signals.")
+                parts.append("Adjacent semantic profile — included for broad coverage near cutoff.")
+
 
             # 4. Company background
             if meta.get("is_pure_consulting"):
@@ -332,7 +348,7 @@ if __name__ == "__main__":
                         help="Path to candidates data file")
     parser.add_argument("--jd", type=str, default="data/jd_extracted.txt",
                         help="Path to JD text file")
-    parser.add_argument("--output", type=str, default="solo_participant.csv",
+    parser.add_argument("--output", type=str, default="ashish-soni-solo.csv",
                         help="Output CSV path")
     parser.add_argument("--format", type=str, choices=["json", "jsonl"], default="jsonl",
                         help="Format of the candidates file")

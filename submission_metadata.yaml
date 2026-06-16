@@ -14,7 +14,7 @@ github_repo: "https://github.com/ashishSoni1234/smart-recruiter-ats"
 
 sandbox_link: "https://colab.research.google.com/github/ashishSoni1234/smart-recruiter-ats/blob/main/sandbox_demo.ipynb"
 
-reproduce_command: "python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output solo_participant.csv --format jsonl"
+reproduce_command: "python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output ashish-soni-solo.csv --format jsonl"
 
 compute:
   platform: "Local CPU (Windows)"

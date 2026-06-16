@@ -156,11 +156,11 @@ class CandidateEnricher:
                         f"but career history only spans {total_career_months/12:.1f} yrs."
                     )
 
-        # Honeypot detection: "expert" in >8 skills with 0 endorsements and 0 duration
+        # Honeypot detection: "expert" in >=6 skills with 0 endorsements and 0 duration
         expert_skills = [s for s in candidate.skills if s.proficiency == "expert"]
-        if len(expert_skills) >= 8:
+        if len(expert_skills) >= 6:
             zero_proof = [s for s in expert_skills if s.endorsements == 0 and (s.duration_months or 0) == 0]
-            if len(zero_proof) >= 6:
+            if len(zero_proof) >= 4:
                 flags["is_dealbreaker"] = True
                 flags["reasons"].append(
                     f"Honeypot Detected: Claims {len(expert_skills)} 'expert' skills "

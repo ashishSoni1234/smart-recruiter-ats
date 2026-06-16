@@ -42,15 +42,44 @@ pip install -r requirements.txt
 
 ## 2. Reproduction Command
 
-To reproduce the **exact submission CSV** from raw candidate data, run:
+### Step A — Pre-Computation (One-time, needs internet)
+
+Download the HuggingFace models to local cache (only needed once):
 
 ```bash
-python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output solo_participant.csv --format jsonl
+# Download and cache embedding model + cross-encoder (~150MB total)
+python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('BAAI/bge-small-en-v1.5'); CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); print('Models cached.')"
+```
+
+The JD intent cache is already committed to the repo (`data/jd_intent_cache.json`) — no Groq API call needed.
+
+### Step B — Ranking (Fully Offline)
+
+To reproduce the **exact submission CSV** from raw candidate data:
+
+```bash
+python pipeline.py --candidates data/candidates.jsonl --jd data/jd_extracted.txt --output ashish-soni-solo.csv --format jsonl
 ```
 
 **Expected runtime:** ~90 seconds on 8-core CPU  
 **RAM usage:** ~4-6 GB peak  
-**Network required:** ❌ No (fully offline — JD intent pre-cached)
+**Network required:** ❌ No (models pre-cached, JD intent pre-cached)
+
+### Step C — Validate Output
+
+```bash
+python data/validate_submission.py ashish-soni-solo.csv
+```
+
+### Docker (Alternative)
+
+```bash
+# Build image (downloads models during build — needs internet once)
+docker build -t smart-recruiter-ats .
+
+# Run ranking (fully offline — produces ashish-soni-solo.csv in container)
+docker run --rm -v $(pwd)/data:/app/data smart-recruiter-ats
+```
 
 ---
 
